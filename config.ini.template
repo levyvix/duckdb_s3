@@ -1,0 +1,9 @@
+[aws]
+s3_access_key_id = 
+s3_secret_access_key = 
+s3_region_name = 
+
+[datalake]
+bronze_bucket = 
+silver_bucket = 
+gold_bucket = 
