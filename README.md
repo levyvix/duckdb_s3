@@ -15,7 +15,8 @@ git clone https://github.com/levyvix/duckdb_s3.git
 ```bash
 $ cd duckdb_s3
 $ python3 -m venv .venv
-$ source .venv/bin/activate
+$ source .venv/bin/activate (Linux) | .venv\Scripts\activate (Windows)
+
 # Install required packages
 $ pip install -r requirements.txt
 ```

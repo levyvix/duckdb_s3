@@ -26,7 +26,7 @@ logger.add(
 
 class DataLakeIngester:
     def __init__(self, dataset_base_path: str):
-        """Args:
+        """Initializes the DataLakeIngester object.
 
         Args:
             s3_path (str): like "gharchive/events"
@@ -34,7 +34,7 @@ class DataLakeIngester:
         self.dataset_base_path = dataset_base_path
         self.s3_client = None
         self.config: configparser.ConfigParser = self._load_config()
-        self.init_s3_client()
+        self._init_s3_client()
         self._load_config()
 
     def _load_config(self):
@@ -47,7 +47,7 @@ class DataLakeIngester:
 
         return config
 
-    def init_s3_client(self):
+    def _init_s3_client(self):
         try:
             self.s3_client = boto3.client(
                 "s3",
@@ -59,6 +59,29 @@ class DataLakeIngester:
         except Exception as e:
             logger.error("Failed to initialize S3 client: {}", e)
 
+    def _date_to_s3_key(self, process_date: datetime) -> str:
+        return "gharchive/events/{}/{}/{}.json.gz".format(
+            process_date.strftime("%Y-%m-%d"),
+            process_date.strftime("%H"),
+            process_date.strftime("%Y-%m-%d-%H"),
+        )
+
+    def _get_data_from_url(self, url: str) -> bytes:
+        logger.info("Downloading data from {}", url)
+
+        response = requests.get(url)
+        response.raise_for_status()
+        logger.success("Downloaded data from {}", url)
+
+        return response.content
+
+    def _upload_file_to_s3_path(self, content: bytes, s3_key: str):
+        logger.info("Uploading data to S3: {}", s3_key)
+        self.s3_client.upload_fileobj(
+            io.BytesIO(content), "dataeng-landing-zone-957", s3_key
+        )
+        logger.success("Uploaded data to S3: {}", s3_key)
+
     def ingest_hourly_gharchive(self, process_date: datetime):
         # self.init_s3_client()
         process_date_str = process_date.strftime("%Y-%m-%d-%H")
@@ -66,22 +89,8 @@ class DataLakeIngester:
 
         url = f"https://data.gharchive.org/{process_date_str}.json.gz"
 
-        logger.info("Downloading data from {}", url)
-        response = requests.get(url)
-        response.raise_for_status()
-        logger.success("Downloaded data from {}", url)
+        response_content = self._get_data_from_url(url)
 
-        response_content = response.content
+        target_s3_key = self._date_to_s3_key(process_date)
 
-        # gharchive/events/{yyyy-mm-dd}/{hh}/{yyyy-mm-dd-H}.json.gz
-        target_s3_key = "gharchive/events/{}/{}/{}.json.gz".format(
-            process_date.strftime("%Y-%m-%d"),
-            process_date.strftime("%H"),
-            process_date_str,
-        )
-
-        logger.info("Uploading data to S3: {}", target_s3_key)
-        self.s3_client.upload_fileobj(
-            io.BytesIO(response_content), "dataeng-landing-zone-957", target_s3_key
-        )
-        logger.success("Uploaded data to S3: {}", target_s3_key)
+        self._upload_file_to_s3_path(response_content, target_s3_key)

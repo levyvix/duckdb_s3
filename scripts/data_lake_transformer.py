@@ -57,6 +57,13 @@ class DataLakeTransformer(object):
         self.con.execute(f"SET s3_access_key_id='{aws_access_key_id}'")
         self.con.execute(f"SET s3_secret_access_key='{aws_secret_access_key}'")
 
+    def _build_path(
+        self, bucket: str, process_date: datetime, file_extension: str
+    ) -> str:
+        year_month_day = process_date.strftime("%Y-%m-%d")
+        hour = process_date.strftime("%H")
+        return f"s3://{bucket}/{self.dataset_base_path}/{year_month_day}/{hour}/{year_month_day}-{hour}.{file_extension}"
+
     def transform(
         self,
         process_date: datetime = datetime.now().replace(
@@ -71,22 +78,23 @@ class DataLakeTransformer(object):
         bronze_bucket = self.config.get("datalake", "bronze_bucket")
         silver_bucket = self.config.get("datalake", "silver_bucket")
 
-        # extract
+        source_path = self._build_path(bronze_bucket, process_date, "json.gz")
+        target_path = self._build_path(silver_bucket, process_date, "parquet")
+
+        self._serialize_data(source_path)
+        self._clean_data()
+        self._write_data_to_parquet(target_path, duckdb_table="gharchive_clean")
+
+    def _serialize_data(self, source_path: str):
         logger.info("DuckDB - serializing data...")
-
-        year_month_day = process_date.strftime("%Y-%m-%d")
-        hour = process_date.strftime("%H")
-
-        source_path = f"s3://{bronze_bucket}/{self.dataset_base_path}/{year_month_day}/{hour}/{year_month_day}-{hour}.json.gz"
-        target_path = f"s3://{silver_bucket}/{self.dataset_base_path}/{year_month_day}/{hour}/{year_month_day}-{hour}.parquet"
         self.con.execute(f"""
                          create or replace table gharchive_raw as 
                          from read_json_auto('{source_path}', ignore_errors=true)
                          """)
-
         logger.success("DuckDB - data serialized")
-        # clean
 
+    def _clean_data(self):
+        logger.info("DuckDB - cleaning data...")
         query = """
             SELECT 
             id AS "event_id",
@@ -100,14 +108,14 @@ class DataLakeTransformer(object):
             created_at AS "event_date"
             FROM 'gharchive_raw'
         """
-
-        logger.info("DuckDB - cleaning data...")
         self.con.execute(f"CREATE OR REPLACE TABLE gharchive_clean AS FROM ({query})")
+        logger.success("DuckDB - data cleaned")
 
-        # load
-        result_table = self.con.table("gharchive_clean")
-
+    def _write_data_to_parquet(self, target_path: str, duckdb_table: str):
+        logger.info("DuckDB - writing cleaned data to parquet...")
+        result_table = self.con.table(f"{duckdb_table}")
         result_table.write_parquet(target_path)
+        logger.success("DuckDB - cleaned data written to parquet")
 
     def aggregate_silver_data(self, process_date: datetime):
         """
@@ -115,7 +123,6 @@ class DataLakeTransformer(object):
 
         :param process_date: the process date corresponding to the daily partition to aggregate
         """
-
         try:
             source_bucket = self.config.get("datalake", "silver_bucket")
             sink_bucket = self.config.get("datalake", "gold_bucket")
@@ -125,32 +132,24 @@ class DataLakeTransformer(object):
             source_path = f"s3://{source_bucket}/{self.dataset_base_path}/{year_month_day}/*/*.parquet"
             target_path = f"s3://{sink_bucket}/{self.dataset_base_path}/{year_month_day}/{year_month_day}.parquet"
 
-            # get data
-            logger.info("DuckDB - aggregating data...")
-            query = f"""
-                SELECT 
-                event_type,
-                repo_id,
-                repo_name,
-                repo_url,
-                DATE_TRUNC('day',CAST(event_date AS TIMESTAMP)) AS event_date,
-                count(*) AS event_count
-                FROM '{source_path}'
-                GROUP BY ALL
-            """
-            self.con.execute(f"CREATE OR REPLACE TABLE gharchive_agg AS FROM ({query})")
-
-            logger.success("DuckDB - data aggregated")
-
-            # load
-
-            logger.info("DuckDB - writing aggregated data to parquet...")
-
-            result_table = self.con.table("gharchive_agg")
-
-            result_table.write_parquet(target_path)
-
-            logger.success("DuckDB - aggregated data written to parquet")
+            self._aggregate_data(source_path)
+            self._write_data_to_parquet(target_path, duckdb_table="gharchive_agg")
 
         except Exception as e:
             logger.error(f"Error in aggregate_silver_data: {str(e)}")
+
+    def _aggregate_data(self, source_path: str):
+        logger.info("DuckDB - aggregating data...")
+        query = f"""
+            SELECT 
+            event_type,
+            repo_id,
+            repo_name,
+            repo_url,
+            DATE_TRUNC('day',CAST(event_date AS TIMESTAMP)) AS event_date,
+            count(*) AS event_count
+            FROM '{source_path}'
+            GROUP BY ALL
+        """
+        self.con.execute(f"CREATE OR REPLACE TABLE gharchive_agg AS FROM ({query})")
+        logger.success("DuckDB - data aggregated")
