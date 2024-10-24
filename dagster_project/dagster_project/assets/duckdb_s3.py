@@ -7,7 +7,7 @@ from dagster import (
     asset,
 )
 
-from .resources_duckdb_s3 import DataLakeIngesterResource, DataLakeTransformerResource
+from ..resources import DataLakeIngesterResource, DataLakeTransformerResource
 
 
 @asset

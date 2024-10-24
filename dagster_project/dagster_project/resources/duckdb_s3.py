@@ -6,7 +6,7 @@ from pathlib import Path
 import boto3
 import duckdb
 import requests
-from dagster import ConfigurableResource, EnvVar
+from dagster import EnvVar
 
 
 class DataLakeIngester:
@@ -14,7 +14,7 @@ class DataLakeIngester:
         """Initializes the DataLakeIngester object.
 
         Args:
-                        s3_path (str): like "gharchive/events"
+            s3_path (str): like "gharchive/events"
         """
         self.dataset_base_path = dataset_base_path
         self.s3_client = None
@@ -198,17 +198,3 @@ class DataLakeTransformer:
 			GROUP BY ALL
 		"""
         self.con.execute(f"CREATE OR REPLACE TABLE gharchive_agg AS FROM ({query})")
-
-
-class DataLakeIngesterResource(ConfigurableResource):
-    dataset_base_path: str
-
-    def get_ingester(self):
-        return DataLakeIngester(dataset_base_path=self.dataset_base_path)
-
-
-class DataLakeTransformerResource(ConfigurableResource):
-    dataset_base_path: str
-
-    def get_transformer(self):
-        return DataLakeTransformer(dataset_base_path=self.dataset_base_path)

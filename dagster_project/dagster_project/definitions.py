@@ -6,8 +6,8 @@ from dagster import (
     load_assets_from_modules,
 )
 
-from . import assets_duckdb_s3
-from .resources_duckdb_s3 import DataLakeIngesterResource, DataLakeTransformerResource
+from .assets import duckdb_s3 as assets_duckdb_s3
+from .resources import DataLakeIngesterResource, DataLakeTransformerResource
 
 # -- duckdb_s3
 duckdb_s3_assets = load_assets_from_modules([assets_duckdb_s3])
