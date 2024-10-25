@@ -4,6 +4,7 @@ from dagster import (
     ScheduleDefinition,
     define_asset_job,
     load_assets_from_modules,
+    multiprocess_executor,
 )
 
 from .assets import duckdb_s3 as assets_duckdb_s3
@@ -15,7 +16,11 @@ duckdb_s3_job = define_asset_job(
     name="duckdb_s3_job",
     selection=AssetSelection.assets(*duckdb_s3_assets),
     description="Ingest and transform data",
+    executor_def=multiprocess_executor.configured(
+        {"max_concurrent": 3}
+    ),  # Set concurrency to 3
 )
+
 duckdb_s3_schedule = ScheduleDefinition(
     name="duckdb_s3_schedule",
     cron_schedule="0 * * * *",

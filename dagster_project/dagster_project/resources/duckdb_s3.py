@@ -40,7 +40,7 @@ class DataLakeIngester:
 
             try:
                 response = self.s3_client.list_buckets()
-                print("Buckets:", [bucket["Name"] for bucket in response["Buckets"]])
+                # print("Buckets:", [bucket["Name"] for bucket in response["Buckets"]])
             except Exception as e:
                 print(f"Failed to list S3 buckets: {str(e)}")
         except Exception as e:
@@ -62,6 +62,10 @@ class DataLakeIngester:
     def ingest_hourly_gharchive(self, process_date: datetime):
         # self.init_s3_client()
         process_date_str = process_date.strftime("%Y-%m-%d-%H")
+
+        # if the Hour is below 10, remove the leading 0
+        if process_date_str[-2] == "0":
+            process_date_str = process_date_str[:-2] + process_date_str[-1]
 
         url = f"https://data.gharchive.org/{process_date_str}.json.gz"
 
@@ -131,6 +135,12 @@ class DataLakeTransformer:
         bronze_bucket = self._get_env_var("bronze_bucket")
         silver_bucket = self._get_env_var("silver_bucket")
 
+        # remove leading zero from hour if below 10
+        if process_date.strftime("%H")[0] == "0":
+            process_date = process_date.replace(
+                hour=int(process_date.strftime("%H")[1])
+            )
+
         source_path = self._build_path(bronze_bucket, process_date, "json.gz")
         target_path = self._build_path(silver_bucket, process_date, "parquet")
 
@@ -173,6 +183,12 @@ class DataLakeTransformer:
         try:
             source_bucket = self._get_env_var("silver_bucket")
             sink_bucket = self._get_env_var("gold_bucket")
+
+            # remove leading zero from hour if below 10
+            if process_date.strftime("%H")[0] == "0":
+                process_date = process_date.replace(
+                    hour=int(process_date.strftime("%H")[1])
+                )
 
             year_month_day = process_date.strftime("%Y-%m-%d")
 

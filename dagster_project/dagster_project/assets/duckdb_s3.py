@@ -3,6 +3,7 @@ from datetime import datetime, timedelta
 
 from dagster import (
     AssetExecutionContext,
+    HourlyPartitionsDefinition,
     MaterializeResult,
     asset,
 )
@@ -10,48 +11,70 @@ from dagster import (
 from ..resources import DataLakeIngesterResource, DataLakeTransformerResource
 
 
-@asset
+@asset(
+    partitions_def=HourlyPartitionsDefinition(
+        start_date=datetime(2024, 10, 10, 0, 0, 0)
+    ),
+)
 def ingest_data(
     context: AssetExecutionContext, data_lake_ingester: DataLakeIngesterResource
 ) -> MaterializeResult:
     context.log.info("Ingesting data")
 
     # get datetiem of execution
-    now = datetime.now(dt.timezone.utc)
+    partition = context.partition_key
+    context.log.info("Partition: " + str(partition))
+    now = context.partition_key
 
-    process_date = now.replace(minute=0, second=0, microsecond=0) - timedelta(hours=4)
+    now_datetime = datetime.strptime(now, "%Y-%m-%d-%H:%M")
+
+    process_date = now_datetime - timedelta(hours=4)
 
     context.log.info(f"Processing date: {process_date}")
 
     data_lake_ingester.get_ingester().ingest_hourly_gharchive(process_date)
 
 
-@asset(deps=[ingest_data])
+@asset(
+    deps=[ingest_data],
+    partitions_def=HourlyPartitionsDefinition(
+        start_date=datetime(2024, 10, 10, 0, 0, 0)
+    ),
+)
 def transform_data(
     context: AssetExecutionContext, data_lake_transformer: DataLakeTransformerResource
 ):
     context.log.info("Transforming data")
 
     # get datetiem of execution
-    now = datetime.now(dt.timezone.utc)
+    now = context.partition_key
 
-    process_date = now.replace(minute=0, second=0, microsecond=0) - timedelta(hours=4)
+    now_datetime = datetime.strptime(now, "%Y-%m-%d-%H:%M")
+
+    process_date = now_datetime - timedelta(hours=4)
 
     context.log.info(f"Processing date: {process_date}")
 
     data_lake_transformer.get_transformer().transform(process_date)
 
 
-@asset(deps=[transform_data])
+@asset(
+    deps=[transform_data],
+    partitions_def=HourlyPartitionsDefinition(
+        start_date=datetime(2024, 10, 10, 0, 0, 0)
+    ),
+)
 def aggregate_data(
-    context: AssetExecutionContext, data_lake_transformer: DataLakeTransformerResource
+    context: AssetExecutionContext,
+    data_lake_transformer: DataLakeTransformerResource,
 ):
     context.log.info("Aggregating data")
 
     # get datetiem of execution
-    now = datetime.now(dt.timezone.utc)
+    now = context.partition_key
+    now_datetime = datetime.strptime(now, "%Y-%m-%d-%H:%M")
 
-    process_date = now.replace(minute=0, second=0, microsecond=0) - timedelta(hours=4)
+    process_date = now_datetime - timedelta(hours=4)
 
     context.log.info(f"Processing date: {process_date}")
 
