@@ -1,0 +1,10 @@
+boto3 
+configparser 
+duckdb 
+loguru 
+matplotlib 
+pandas
+pathlib 
+python-dotenv
+requests
+dlt 
