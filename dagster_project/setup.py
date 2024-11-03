@@ -10,6 +10,7 @@ setup(
         "requests",
         "duckdb",
         "boto3",
+        "dlt[duckdb, filesystem]",
     ],
     extras_require={"dev": ["dagster-webserver", "pytest"]},
 )
