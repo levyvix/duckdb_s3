@@ -39,19 +39,16 @@ class DataLakeIngester:
             )
 
             try:
-                response = self.s3_client.list_buckets()
-                # print("Buckets:", [bucket["Name"] for bucket in response["Buckets"]])
+                self.s3_client.list_buckets()
             except Exception as e:
                 print(f"Failed to list S3 buckets: {str(e)}")
         except Exception as e:
             print(f"Failed to initialize S3 client: {str(e)}")
 
     def _date_to_s3_key(self, process_date: datetime) -> str:
-        return "gharchive/events/{}/{}/{}.json.gz".format(
-            process_date.strftime("%Y-%m-%d"),
-            process_date.strftime("%H"),
-            process_date.strftime("%Y-%m-%d-%H"),
-        )
+        year_month_day = process_date.strftime("%Y-%m-%d")
+        hour = process_date.strftime("%H")
+        return f"gharchive/events/{year_month_day}/{hour}/{year_month_day}-{hour}.json.gz"
 
     def _get_data_from_url(self, url: str) -> bytes:
         response = requests.get(url)
@@ -60,31 +57,21 @@ class DataLakeIngester:
         return response.content
 
     def ingest_hourly_gharchive(self, process_date: datetime):
-        # self.init_s3_client()
-        process_date_str = process_date.strftime("%Y-%m-%d-%H")
-
-        # if the Hour is below 10, remove the leading 0
-        if process_date_str[-2] == "0":
-            process_date_str = process_date_str[:-2] + process_date_str[-1]
+        # GHArchive usa hora sem zero à esquerda (ex: 2024-10-20-9 em vez de 2024-10-20-09)
+        year_month_day = process_date.strftime("%Y-%m-%d")
+        hour = process_date.hour
+        process_date_str = f"{year_month_day}-{hour}"
 
         url = f"https://data.gharchive.org/{process_date_str}.json.gz"
 
-        try:
-            response_content = self._get_data_from_url(url)
-            target_s3_key = self._date_to_s3_key(process_date)
+        response_content = self._get_data_from_url(url)
+        target_s3_key = self._date_to_s3_key(process_date)
 
-            # Upload to S3
-            with io.BytesIO(response_content) as data_stream:
-                self.s3_client.upload_fileobj(
-                    data_stream, "dataeng-landing-zone-957", target_s3_key
-                )
+        bucket_name = self._get_env_var("bronze_bucket")
+        with io.BytesIO(response_content) as data_stream:
+            self.s3_client.upload_fileobj(data_stream, bucket_name, target_s3_key)
 
-            print(
-                f"Successfully uploaded to s3://dataeng-landing-zone-957/{target_s3_key}"
-            )
-        except Exception as e:
-            print(f"Failed to ingest data for {process_date_str}: {str(e)}")
-            raise e
+        print(f"Dados enviados com sucesso para s3://{bucket_name}/{target_s3_key}")
 
 
 class DataLakeTransformer:
@@ -115,9 +102,11 @@ class DataLakeTransformer:
         """Read S3 credentials and endpoint from config file"""
         aws_access_key_id = self._get_env_var("s3_access_key_id")
         aws_secret_access_key = self._get_env_var("s3_secret_access_key")
+        aws_region = self._get_env_var("s3_region_name")
         # Set S3 credentials
         self.con.execute(f"SET s3_access_key_id='{aws_access_key_id}'")
         self.con.execute(f"SET s3_secret_access_key='{aws_secret_access_key}'")
+        self.con.execute(f"SET s3_region='{aws_region}'")
 
     def _build_path(
         self, bucket: str, process_date: datetime, file_extension: str
@@ -126,20 +115,14 @@ class DataLakeTransformer:
         hour = process_date.strftime("%H")
         return f"s3://{bucket}/{self.dataset_base_path}/{year_month_day}/{hour}/{year_month_day}-{hour}.{file_extension}"
 
-    def transform(self, process_date: datetime) -> duckdb.DuckDBPyRelation:
+    def transform(self, process_date: datetime) -> None:
         """
-        Serialize and clean raw data, then export to parquet format on next zone.
+        Serializar e limpar dados brutos, depois exportar para formato parquet na próxima camada.
 
-        :param process_date: the process date corresponding to the hourly partition to serialise
+        :param process_date: data de processamento correspondente à partição horária a serializar
         """
         bronze_bucket = self._get_env_var("bronze_bucket")
         silver_bucket = self._get_env_var("silver_bucket")
-
-        # remove leading zero from hour if below 10
-        if process_date.strftime("%H")[0] == "0":
-            process_date = process_date.replace(
-                hour=int(process_date.strftime("%H")[1])
-            )
 
         source_path = self._build_path(bronze_bucket, process_date, "json.gz")
         target_path = self._build_path(silver_bucket, process_date, "parquet")
@@ -176,30 +159,20 @@ class DataLakeTransformer:
 
     def aggregate_silver_data(self, process_date: datetime):
         """
-        Aggregate raw data and export to parquet format.
+        Agregar dados da camada silver e exportar para formato parquet.
 
-        :param process_date: the process date corresponding to the daily partition to aggregate
+        :param process_date: data de processamento correspondente à partição diária a agregar
         """
-        try:
-            source_bucket = self._get_env_var("silver_bucket")
-            sink_bucket = self._get_env_var("gold_bucket")
+        source_bucket = self._get_env_var("silver_bucket")
+        sink_bucket = self._get_env_var("gold_bucket")
 
-            # remove leading zero from hour if below 10
-            if process_date.strftime("%H")[0] == "0":
-                process_date = process_date.replace(
-                    hour=int(process_date.strftime("%H")[1])
-                )
+        year_month_day = process_date.strftime("%Y-%m-%d")
 
-            year_month_day = process_date.strftime("%Y-%m-%d")
+        source_path = f"s3://{source_bucket}/{self.dataset_base_path}/{year_month_day}/*/*.parquet"
+        target_path = f"s3://{sink_bucket}/{self.dataset_base_path}/{year_month_day}/{year_month_day}.parquet"
 
-            source_path = f"s3://{source_bucket}/{self.dataset_base_path}/{year_month_day}/*/*.parquet"
-            target_path = f"s3://{sink_bucket}/{self.dataset_base_path}/{year_month_day}/{year_month_day}.parquet"
-
-            self._aggregate_data(source_path)
-            self._write_data_to_parquet(target_path, duckdb_table="gharchive_agg")
-
-        except Exception as e:
-            print(f"Error in aggregate_silver_data: {str(e)}")
+        self._aggregate_data(source_path)
+        self._write_data_to_parquet(target_path, duckdb_table="gharchive_agg")
 
     def _aggregate_data(self, source_path: str):
         query = f"""

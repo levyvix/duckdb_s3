@@ -1,3 +1,5 @@
+from pathlib import Path
+
 from dagster import (
     AssetSelection,
     Definitions,
@@ -5,9 +7,14 @@ from dagster import (
     define_asset_job,
     load_assets_from_modules,
 )
+from dotenv import load_dotenv
 
 from .assets import duckdb_s3 as assets_duckdb_s3
 from .resources import DataLakeIngesterResource, DataLakeTransformerResource
+
+# Load environment variables from .env file
+env_path = Path(__file__).parent.parent / ".env"
+load_dotenv(dotenv_path=env_path)
 
 # -- duckdb_s3
 duckdb_s3_assets = load_assets_from_modules([assets_duckdb_s3])

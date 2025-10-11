@@ -1,4 +1,3 @@
-import datetime as dt
 from datetime import datetime, timedelta
 
 from dagster import (
@@ -23,7 +22,7 @@ def ingest_data(
 
     # get datetiem of execution
     partition = context.partition_key
-    context.log.info("Partition: " + str(partition))
+    context.log.info(f"Partition: {partition}")
     now = context.partition_key
 
     now_datetime = datetime.strptime(now, "%Y-%m-%d-%H:%M")
@@ -34,6 +33,9 @@ def ingest_data(
 
     data_lake_ingester.get_ingester().ingest_hourly_gharchive(process_date)
 
+    context.log.info(f"Successfully ingested data for {process_date}")
+    return MaterializeResult(metadata={"process_date": str(process_date)})
+
 
 @asset(
     deps=[ingest_data],
@@ -43,7 +45,7 @@ def ingest_data(
 )
 def transform_data(
     context: AssetExecutionContext, data_lake_transformer: DataLakeTransformerResource
-):
+) -> MaterializeResult:
     context.log.info("Transforming data")
 
     # get datetiem of execution
@@ -57,6 +59,9 @@ def transform_data(
 
     data_lake_transformer.get_transformer().transform(process_date)
 
+    context.log.info(f"Successfully transformed data for {process_date}")
+    return MaterializeResult(metadata={"process_date": str(process_date)})
+
 
 @asset(
     deps=[transform_data],
@@ -67,7 +72,7 @@ def transform_data(
 def aggregate_data(
     context: AssetExecutionContext,
     data_lake_transformer: DataLakeTransformerResource,
-):
+) -> MaterializeResult:
     context.log.info("Aggregating data")
 
     # get datetiem of execution
@@ -76,6 +81,13 @@ def aggregate_data(
 
     process_date = now_datetime - timedelta(hours=4)
 
-    context.log.info(f"Processing date: {process_date}")
+    # Aggregate data needs date without hour (daily aggregation)
+    agg_date = process_date.replace(hour=0, minute=0, second=0, microsecond=0)
 
-    data_lake_transformer.get_transformer().aggregate_silver_data(process_date)
+    context.log.info(f"Processing date: {process_date}")
+    context.log.info(f"Aggregation date (daily): {agg_date}")
+
+    data_lake_transformer.get_transformer().aggregate_silver_data(agg_date)
+
+    context.log.info(f"Successfully aggregated data for {agg_date}")
+    return MaterializeResult(metadata={"process_date": str(process_date), "agg_date": str(agg_date)})

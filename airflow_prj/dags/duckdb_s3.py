@@ -1,8 +1,14 @@
-import pendulum
 from airflow.decorators import dag, task
 from airflow.operators.python import get_current_context
 from include.resources.duckdb_s3 import DataLakeIngester, DataLakeTransformer
-from pendulum import datetime
+from pendulum import datetime, now
+
+
+def calcular_data_particao():
+    """Calcular data de partição a partir do contexto do Airflow"""
+    context = get_current_context()
+    partition_date = context.get("logical_date", now()).set(minute=0, microsecond=0, second=0).subtract(hours=3)
+    return partition_date
 
 
 @dag(
@@ -13,56 +19,25 @@ from pendulum import datetime
 def init():
     @task
     def ingest_hourly_gharchive():
-        context = get_current_context()
-
-        partition_date = (
-            context["logical_date"]
-            .set(
-                minute=0,
-                microsecond=0,
-                second=0,
-            )
-            .subtract(hours=3)
-        )
-        print(partition_date)
-        dli = DataLakeIngester("gharchive/events")
-        dli.ingest_hourly_gharchive(partition_date)
+        partition_date = calcular_data_particao()
+        ingester = DataLakeIngester("gharchive/events")
+        ingester.ingest_hourly_gharchive(partition_date)
 
     @task
     def transform():
-        context = get_current_context()
-
-        partition_date = (
-            context["logical_date"]
-            .set(
-                minute=0,
-                microsecond=0,
-                second=0,
-            )
-            .subtract(hours=3)
-        )
-
-        dlt = DataLakeTransformer("gharchive/events")
-        dlt.transform(partition_date)
+        partition_date = calcular_data_particao()
+        transformer = DataLakeTransformer("gharchive/events")
+        transformer.transform(partition_date)
 
     @task
     def aggregate():
-        context = get_current_context()
+        partition_date = calcular_data_particao()
+        # Aggregate data needs date without hour (daily aggregation)
+        agg_date = partition_date.set(hour=0, minute=0, second=0, microsecond=0)
+        transformer = DataLakeTransformer("gharchive/events")
+        transformer.aggregate_silver_data(agg_date)
 
-        partition_date = (
-            context["logical_date"]
-            .set(
-                minute=0,
-                microsecond=0,
-                second=0,
-            )
-            .subtract(hours=3)
-        )
-
-        dlt = DataLakeTransformer("gharchive/events")
-        dlt.aggregate_silver_data(partition_date)
-
-    ingest_hourly_gharchive() >> transform() >> aggregate()
+    ingest_hourly_gharchive() >> transform() >> aggregate()  # type: ignore
 
 
 dag_start = init()

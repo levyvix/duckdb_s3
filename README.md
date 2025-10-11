@@ -4,53 +4,116 @@ Building a simple data lake based on Medallion Archirecture, to incrementally in
 
 ![DuckDB gharchive pipeline](https://github.com/user-attachments/assets/0b37081e-a786-4687-9a3f-99c768f963b1)
 
+## Prerequisites
+
+### Install UV (Python Package Manager)
+
+UV is a fast Python package manager used in this project. Install it:
+
+**Linux/macOS:**
+```bash
+curl -LsSf https://astral.sh/uv/install.sh | sh
+```
+
+**Windows:**
+```powershell
+powershell -c "irm https://astral.sh/uv/install.ps1 | iex"
+```
+
+Verify installation:
+```bash
+uv --version
+```
+
+### Install Astro CLI (for Airflow)
+
+Astro CLI is used to run Airflow locally. Install it:
+
+**Linux:**
+```bash
+curl -sSL install.astronomer.io | sudo bash -s
+```
+
+**macOS:**
+```bash
+brew install astro
+```
+
+**Windows:**
+```powershell
+winget install -e --id Astronomer.Astro
+```
+
+Verify installation:
+```bash
+astro version
+```
+
 ## Clone The Repository
 
 ```bash
 git clone https://github.com/levyvix/duckdb_s3.git
+cd duckdb_s3
 ```
 
-## Setup Python Virtual Environment
+## Setup Python Environment
+
+This project uses UV for dependency management:
 
 ```bash
-$ cd duckdb_s3
-$ python3 -m venv .venv
-$ source .venv/bin/activate (Linux) or .venv\Scripts\activate (Windows)
-
-# Install required packages
-$ pip install -r requirements.txt
+# Install dependencies using UV
+uv sync
 ```
 
 ## Configuration
 
-1. Rename `config.ini.template` to `config.ini`
-2. Edit `config.ini` and fill in your actual AWS S3 credential values in the `[aws]` section.
-3. Edit `config.ini` and fill in the bucket names in `[datalake]` section for each zone in your data lake.
+### For Standalone Scripts and Dagster
 
-## Run the project
-
-### Ingest Data
-
-Run the main_ingest.py script to start the ingestion pipeline.
-
+1. Copy `config.ini.template` to `config.ini`:
 ```bash
-python scripts/main_ingest.py
+cp config.ini.template config.ini
 ```
 
-### Transform Data
+2. Edit `config.ini` and fill in your AWS S3 credentials in the `[aws]` section:
+```ini
+[aws]
+s3_access_key_id = your_access_key_here
+s3_secret_access_key = your_secret_key_here
+s3_region_name = us-east-1
 
-Run the main_transform.py script to transform the ingested data.
-
-```bash
-python scripts/main_transform.py
+[datalake]
+bronze_bucket = your-bronze-bucket
+silver_bucket = your-silver-bucket
+gold_bucket = your-gold-bucket
 ```
 
-### Aggregate Data
+### For Airflow
 
-Run the main_agg.py script to aggregate the transformed data.
+Configure Airflow Variables in the Airflow UI (Admin → Variables):
+
+Required variables:
+- `s3_access_key_id` - AWS access key
+- `s3_secret_access_key` - AWS secret key
+- `s3_region_name` - AWS region (e.g., us-east-1)
+- `bronze_bucket` - S3 bucket name for Bronze layer
+- `silver_bucket` - S3 bucket name for Silver layer
+- `gold_bucket` - S3 bucket name for Gold layer
+
+## Run the Project
+
+### Option 1: Standalone Scripts
+
+Use `uv run` to execute pipeline scripts:
 
 ```bash
-python scripts/main_agg.py
+# Ingest data (Bronze layer)
+uv run scripts/main_ingest.py
+
+# Transform data (Silver layer)
+uv run scripts/main_transform.py
+
+# Aggregate data (Gold layer)
+uv run scripts/main_agg.py
 ```
 
 ### Read the Gold Data
@@ -75,17 +138,36 @@ print(df.head())
 
 Replace `<gold_bucket>` and `<year-month-day>` with your actual bucket name and date.
 
-## Dagster
+### Option 2: Dagster
 
-The project also includes a Dagster pipeline to orchestrate the data pipeline. To run the Dagster pipeline, you can use the following command:
+The project includes a Dagster pipeline to orchestrate the data pipeline:
 
 ```bash
 cd dagster_project
 dagster dev
 ```
 
-Then, open the [Dagster web interface](localhost:3000) in your browser and start the pipeline.
+Then, open the [Dagster web interface](http://localhost:3000) in your browser.
 
-### Run the Job
+**Run the Job:**
 
-In the dagster UI, navigate to the Deployments tab and start the `duckdb_s3_job` job. It will ask if you want to run the latest partition or a backfill. Choose the **latest** partition and click the **Start Job** button.
+In the Dagster UI, navigate to the **Deployments** tab and start the `duckdb_s3_job` job. It will ask if you want to run the latest partition or a backfill. Choose the **latest** partition and click the **Start Job** button.
+
+The pipeline runs hourly via the `duckdb_s3_schedule` (cron: `0 * * * *`).
+
+### Option 3: Airflow
+
+The project includes an Airflow DAG to orchestrate the data pipeline:
+
+```bash
+cd airflow_prj
+astro dev start
+```
+
+Then, open the [Airflow web interface](http://localhost:8080) in your browser.
+
+**IMPORTANT:** Before running the DAG, you must configure the Airflow Variables in the UI (Admin → Variables) as described in the Configuration section above.
+
+**Run the DAG:**
+
+In the Airflow UI, find the `duckdb_s3` DAG and trigger it manually or wait for it to run on schedule.

@@ -1,0 +1,28 @@
+2025-10-11 13:31:58 - SUCCESS - Config loaded from /home/levi/projects/duckdb_s3/config.ini
+2025-10-11 13:38:07 - SUCCESS - Config loaded from /home/levi/projects/duckdb_s3/config.ini
+2025-10-11 13:39:59 - SUCCESS - Config loaded from /home/levi/projects/duckdb_s3/config.ini
+2025-10-11 13:39:59 - SUCCESS - Cliente S3 inicializado
+2025-10-11 13:39:59 - INFO - Ingerindo dados para 2025-10-11-13
+2025-10-11 13:39:59 - INFO - Baixando dados de https://data.gharchive.org/2025-10-11-13.json.gz
+2025-10-11 13:39:59 - SUCCESS - Dados baixados de https://data.gharchive.org/2025-10-11-13.json.gz
+2025-10-11 13:40:59 - SUCCESS - Config loaded from /home/levi/projects/duckdb_s3/config.ini
+2025-10-11 13:40:59 - SUCCESS - Cliente S3 inicializado
+2025-10-11 13:40:59 - INFO - Ingerindo dados para 2025-10-11-13
+2025-10-11 13:40:59 - INFO - Baixando dados de https://data.gharchive.org/2025-10-11-13.json.gz
+2025-10-11 13:40:59 - SUCCESS - Dados baixados de https://data.gharchive.org/2025-10-11-13.json.gz
+2025-10-11 13:40:59 - INFO - Enviando dados para S3: gharchive/events/2025-10-11/13/2025-10-11-13.json.gz
+2025-10-11 13:41:00 - SUCCESS - Dados enviados para S3: gharchive/events/2025-10-11/13/2025-10-11-13.json.gz
+2025-10-11 13:45:33 - SUCCESS - Config loaded from /home/levi/projects/duckdb_s3/config.ini
+2025-10-11 13:45:33 - SUCCESS - Cliente S3 inicializado
+2025-10-11 13:45:33 - INFO - Ingerindo dados para 2025-10-11-13
+2025-10-11 13:45:33 - INFO - Baixando dados de https://data.gharchive.org/2025-10-11-13.json.gz
+2025-10-11 13:45:33 - SUCCESS - Dados baixados de https://data.gharchive.org/2025-10-11-13.json.gz
+2025-10-11 13:45:33 - INFO - Enviando dados para S3: gharchive/events/2025-10-11/13/2025-10-11-13.json.gz
+2025-10-11 13:45:34 - SUCCESS - Dados enviados para S3: gharchive/events/2025-10-11/13/2025-10-11-13.json.gz
+2025-10-11 13:46:31 - SUCCESS - Config loaded from /home/levi/projects/duckdb_s3/config.ini
+2025-10-11 13:46:31 - SUCCESS - Cliente S3 inicializado
+2025-10-11 13:46:31 - INFO - Ingerindo dados para 2025-10-11-13
+2025-10-11 13:46:31 - INFO - Baixando dados de https://data.gharchive.org/2025-10-11-13.json.gz
+2025-10-11 13:46:31 - SUCCESS - Dados baixados de https://data.gharchive.org/2025-10-11-13.json.gz
+2025-10-11 13:46:31 - INFO - Enviando dados para S3: gharchive/events/2025-10-11/13/2025-10-11-13.json.gz
+2025-10-11 13:46:32 - SUCCESS - Dados enviados para S3: gharchive/events/2025-10-11/13/2025-10-11-13.json.gz
